@@ -11,37 +11,25 @@ import  numpy as np
 import random
 def set_random_seed(seed=42):
     """固定所有可能影响结果的随机种子"""
-    # PythonPython内置随机模块
     random.seed(seed)
-    # NumPy
     np.random.seed(seed)
-    # PyTorch CPU上的随机种子
     torch.manual_seed(seed)
-    # PyTorch GPU上的随机种子（单卡）
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
-        # PyTorch GPU上的随机种子（多卡）
         torch.cuda.manual_seed_all(seed)
-    # 确保CUDA卷积操作的确定性（可能影响性能，小样本可开启）
     torch.backends.cudnn.deterministic = True
-    # 禁用CUDA自动优化算法选择（保证相同算法）
     torch.backends.cudnn.benchmark = False
 def main(args):
-    # 设备配置（支持GPU加速）
     set_random_seed(args.seed)
     # device = torch.device(f"cuda:{args.gpu_num}" if torch.cuda.is_available() else "cpu")
     device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
     # 加载数据
     features, label1, label2, label3 = load_dataset(args.data_path)
     
-
-
     X_train, X_test, y1_train, y1_test, y2_train, y2_test, y3_train, y3_test = split_dataset(
     features, label1, label2, label3, test_size=0.2, random_state=42
 )
-    # 构建数据集和数据加载器
     train_dataset = CustomDataset(X_train, y1_train, y2_train, y3_train)
     # test_dataset = CustomDataset(X_test, y1_test, y2_test, y3_test)
     test_dataset = CustomDataset(features, label1, label2, label3)
@@ -49,9 +37,9 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
-    # 模型初始化（每个标签输出2类概率，对应二分类）
+   
     input_size = features.shape[1]
-    output_size = 2  # 关键修改：二分类需输出2个类别概率（用交叉熵损失）
+    output_size = 2  
     model_dict = {
         "mlp": MLP,
         "mlp2": MLP2,
@@ -62,10 +50,9 @@ def main(args):
                 input_size=input_size,
                 hidden_size=args.hidden_size,
                 output_size=output_size,
-                dropout_rate=args.dropout  # MLP2特有的dropout参数
+                dropout_rate=args.dropout  
             ).to(device)
-    # 损失函数和优化器（多分类用交叉熵损失）
-    criterion = nn.CrossEntropyLoss()  # 自动处理2类概率的归一化和损失计算
+    criterion = nn.CrossEntropyLoss()  
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     # 训练阶段
@@ -73,14 +60,13 @@ def main(args):
         model.train()
         train_total_loss = 0.0
         for inputs, l1, l2, l3 in train_loader:
-            # 数据移至设备，标签转为长整数（交叉熵要求标签为int64）
             inputs = inputs.to(device).float()
             l1, l2, l3 = l1.to(device).long(), l2.to(device).long(), l3.to(device).long()
 
-            # 前向传播：模型返回3个输出，每个输出维度为[batch_size, 2]
-            outputs1, outputs2, outputs3 = model(inputs)  # 对应label1/2/3的2类概率
+           
+            outputs1, outputs2, outputs3 = model(inputs)  
 
-            # 计算损失（交叉熵输入：logits[batch, 2] + 标签[batch]）
+          
             loss1 = criterion(outputs1, l1)
             loss2 = criterion(outputs2, l2)
             loss3 = criterion(outputs3, l3)
