@@ -31,8 +31,8 @@ def main(args):
     features, label1, label2, label3, test_size=0.2, random_state=42
 )
     train_dataset = CustomDataset(X_train, y1_train, y2_train, y3_train)
-    # test_dataset = CustomDataset(X_test, y1_test, y2_test, y3_test)
-    test_dataset = CustomDataset(features, label1, label2, label3)
+    test_dataset = CustomDataset(X_test, y1_test, y2_test, y3_test)
+    # test_dataset = CustomDataset(features, label1, label2, label3)
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
@@ -131,7 +131,7 @@ if __name__ == "__main__":
     parser.add_argument("--gpu_num", type=int, default="3", help="gpu num")
     parser.add_argument("--seed", type=int, default="1", help="seed")
     # 训练参数
-    parser.add_argument("--epochs", type=int, default=30, help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=300, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for training")
     parser.add_argument("--hidden_size", type=int, default=16, help="Number of hidden units")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
