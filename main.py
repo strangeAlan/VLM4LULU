@@ -3,12 +3,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from sklearn.model_selection import train_test_split
-from model import CustomDataset, MLP,MLP2,SimpleMLP
+from model import CustomDataset, MLP,MLP2,SimpleMLP,MultiTaskModel,FocalLoss,MultiTaskAttn
 from load_data import load_dataset,split_dataset
 import argparse
 from sklearn.metrics import f1_score
 import  numpy as np
 import random
+from tqdm import tqdm
 def set_random_seed(seed=42):
     """固定所有可能影响结果的随机种子"""
     random.seed(seed)
@@ -39,49 +40,75 @@ def main(args):
 
    
     input_size = features.shape[1]
-    output_size = 2  
+    # output_size = 2  
     model_dict = {
         "mlp": MLP,
         "mlp2": MLP2,
-        "SimpleMLP":SimpleMLP
+        "SimpleMLP":SimpleMLP,
+        "MTM":MultiTaskModel,
+        "att":MultiTaskAttn
     }
     # model = MLP(input_size, args.hidden_size, output_size).to(device)
     model = model_dict[args.model](
                 input_size=input_size,
                 hidden_size=args.hidden_size,
-                output_size=output_size,
+                output_size=args.output_size,
                 dropout_rate=args.dropout  
             ).to(device)
     criterion = nn.CrossEntropyLoss()  
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-
+    # criterion = FocalLoss(alpha=1.0, gamma=2.0)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr,weight_decay=1e-4)
+    lambda_l1 = 1e-4  # 正则化系数，可以调节
     # 训练阶段
-    for epoch in range(args.epochs):
+    epoch_loop = tqdm(
+    range(args.epochs), 
+    desc="Total Training", 
+    unit="epoch"
+    )
+    for epoch in epoch_loop:
         model.train()
         train_total_loss = 0.0
+        # train_loop = tqdm(train_loader, desc=f"Epoch {epoch+1}/{args.epochs}", unit="batch")
         for inputs, l1, l2, l3 in train_loader:
             inputs = inputs.to(device).float()
             l1, l2, l3 = l1.to(device).long(), l2.to(device).long(), l3.to(device).long()
+            # l1, l2, l3 = l1.to(device).float(), l2.to(device).float(), l3.to(device).float()
 
-           
-            outputs1, outputs2, outputs3 = model(inputs)  
+            if args.model !="att":
+                outputs1, outputs2, outputs3 = model(inputs)  
 
-          
-            loss1 = criterion(outputs1, l1)
-            loss2 = criterion(outputs2, l2)
-            loss3 = criterion(outputs3, l3)
+                # loss1 = criterion(outputs1.view(-1), l1)
+                # loss2 = criterion(outputs2.view(-1), l1)
+                # loss3 = criterion(outputs3.view(-1), l1)
+                loss1 = criterion(outputs1, l1)
+                loss2 = criterion(outputs2, l2)
+                loss3 = criterion(outputs3, l3)
+            else:
+                # print("input.shape:",inputs.shape)
+                # continue
+                outs, attn_weights = model(inputs)
+
+                loss1 = criterion(outs[0], l1)*attn_weights[:, 0].mean()
+                loss2 = criterion(outs[1], l2)*attn_weights[:, 1].mean()
+                loss3 = criterion(outs[2], l3)*attn_weights[:, 2].mean()
+
+
             loss = loss1 + loss2 + loss3  # 总损失
-
+            if args.use_l1:
+                l1_reg = torch.tensor(0., device=device)
+                for param in model.parameters():
+                    l1_reg += torch.sum(torch.abs(param))
+                loss += l1_reg#添加L1正则化
             # 反向传播
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
             train_total_loss += loss.item() * inputs.size(0)  # 按批次大小累计
-
         # 计算训练集平均损失
-        train_avg_loss = train_total_loss / len(train_dataset)
-        print(f"Epoch [{epoch+1}/{args.epochs}] | Train Loss: {train_avg_loss:.4f}")
+        # train_avg_loss = train_total_loss / len(train_dataset)
+        # print(f"Epoch [{epoch+1}/{args.epochs}] | Train Loss: {train_avg_loss:.4f}")
+        
 
     # 测试阶段（计算acc和f1-score）
     model.eval()
@@ -92,11 +119,18 @@ def main(args):
         for inputs, l1, l2, l3 in test_loader:
             inputs = inputs.to(device).float()
             l1, l2, l3 = l1.to(device).long(), l2.to(device).long(), l3.to(device).long()
+            if args.model !="att":
+                outputs1, outputs2, outputs3 = model(inputs)
+                pred1 = torch.argmax(outputs1, dim=1)
+                pred2 = torch.argmax(outputs2, dim=1)
+                pred3 = torch.argmax(outputs3, dim=1)
+            else:
+                outs, combined = model(inputs)
+                pred1 = torch.argmax(outs[0], dim=1)
+                pred2 = torch.argmax(outs[1], dim=1)
+                pred3 = torch.argmax(outs[2], dim=1)
 
-            outputs1, outputs2, outputs3 = model(inputs)
-            pred1 = torch.argmax(outputs1, dim=1)
-            pred2 = torch.argmax(outputs2, dim=1)
-            pred3 = torch.argmax(outputs3, dim=1)
+            
 
             # 收集所有预测和真实标签（转为numpy用于计算f1）
             all_pred1.extend(pred1.cpu().numpy())
@@ -134,10 +168,12 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=300, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for training")
     parser.add_argument("--hidden_size", type=int, default=16, help="Number of hidden units")
+    parser.add_argument("--output_size", type=int, default=2, help="out size")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
-    parser.add_argument("--model", type=str, default="mlp", choices=["mlp", "mlp2","SimpleMLP"], 
+    parser.add_argument("--model", type=str, default="mlp", choices=["mlp", "mlp2","SimpleMLP","MTM","att"], 
                       help="选择模型）")
     parser.add_argument("--dropout", type=float, default=0.3, help="dropout")
+    parser.add_argument("--use_l1", type=bool, default=False, help="L1正则化")
     
     args = parser.parse_args()
     print(args)
