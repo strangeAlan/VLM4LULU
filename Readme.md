@@ -351,18 +351,20 @@ VLM4LULU/
 如使用本项目，请考虑引用以下工作：
 
 ```bibtex
-@misc{internvl,
-  title={InternVL: Scaling up Vision Foundation Models and Aligning for Generic Visual-Linguistic Tasks},
-  author={...},
-  year={2023},
-  url={https://github.com/OpenGVLab/InternVL}
+@inproceedings{chen2024internvl,
+  title={Internvl: Scaling up vision foundation models and aligning for generic visual-linguistic tasks},
+  author={Chen, Zhe and Wu, Jiannan and Wang, Wenhai and Su, Weijie and Chen, Guo and Xing, Sen and Zhong, Muyan and Zhang, Qinglong and Zhu, Xizhou and Lu, Lewei and others},
+  booktitle={Proceedings of the IEEE/CVF conference on computer vision and pattern recognition},
+  pages={24185--24198},
+  year={2024}
 }
 
-@misc{videomaev2,
-  title={VideoMAEv2: Scaling Vision Transformers with Masked Autoencoders},
-  author={...},
-  year={2023},
-  url={https://github.com/OpenGVLab/VideoMAEv2}
+@inproceedings{wang2023videomae,
+  title={Videomae v2: Scaling video masked autoencoders with dual masking},
+  author={Wang, Limin and Huang, Bingkun and Zhao, Zhiyu and Tong, Zhan and He, Yinan and Wang, Yi and Wang, Yali and Qiao, Yu},
+  booktitle={Proceedings of the IEEE/CVF conference on computer vision and pattern recognition},
+  pages={14549--14560},
+  year={2023}
 }
 ```
 
